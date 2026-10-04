@@ -1,0 +1,2 @@
+# Optional: only for regenerating README charts.
+matplotlib==3.11.2

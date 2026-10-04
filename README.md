@@ -2,6 +2,49 @@
 
 Asistente de voz local en español para macOS con Apple Silicon. Conversación con un modelo real, transcripción progresiva local, organización y memoria seleccionada. No es una demostración con respuestas simuladas. **La aceptación completa de voz con el usuario y dos personas todavía está pendiente.**
 
+## Precisión y eficiencia medidas
+
+Ensayo reproducible del **4 de octubre de 2026**, en macOS con Apple Silicon y 16 GB de RAM. Se utilizaron **5 frases españolas sintéticas** de Piper, transcritas con Moonshine Small Streaming ES: una pasada con voz limpia y otra con tres tonos añadidos a **10 dB SNR**. Son 5 casos emparejados, no 10 conversaciones independientes. No se usaron grabaciones ni conversaciones del usuario.
+
+![Error de palabras y tiempo de proceso por frase](docs/assets/precision-efficiency.png)
+
+| Condición | Casos | Palabras de referencia | Errores | WER agregado ↓ | RTF mediano ↓ | Proceso ASR mediano |
+|---|---:|---:|---:|---:|---:|---:|
+| Voz limpia | 5 | 61 | 1 | 1.64 % | 0.074 | 0.904 s |
+| Voz + tonos | 5 | 61 | 1 | 1.64 % | 0.074 | 0.898 s |
+
+**Cómo leer los resultados:** WER = (sustituciones + omisiones + inserciones) / palabras de referencia; cuanto menor, mejor. Se normalizan mayúsculas, tildes y puntuación. No equivale a precisión semántica ni valida las respuestas del asistente. El error observado en ambos escenarios fue una sustitución del nombre «Python» por «piton» en una frase.
+
+RTF = tiempo del proceso ASR / duración del clip. Cada clip contiene **12,2 s, incluidos silencios de relleno**. El proceso incluye carga del modelo y transcripción, pero excluye síntesis de voz; el audio se envía más rápido que en tiempo real. Este indicador **no es la latencia que experimenta una persona hablando**. Se publican todos los puntos y los datos, sin inferir significación estadística ni ventaja de una condición sobre otra.
+
+El ensayo anterior de pregunta hablada produjo el primer texto de respuesta en **8,09 s después de terminar de enviar el audio** (una sola ejecución, no p50/p95). No se compara directamente con el RTF del gráfico.
+
+**Límites:** muestra pequeña, una voz sintética y tonos simples; no música real, eco de altavoces, acentos variados ni conversaciones con varios hablantes. La precisión con el video del usuario y la latencia p50/p95 de extremo a extremo siguen pendientes. No se promete el mismo rendimiento fuera de estas condiciones.
+
+[Datos por caso y metodología](docs/assets/benchmark.json) · [Resumen numérico](docs/assets/summary.json) · [Validación y límites](docs/VALIDACION.md)
+
+Para repetir el ensayo y regenerar el gráfico, con los modelos ya instalados:
+
+```sh
+.venv/bin/python scripts/benchmark_readme.py
+.venv/bin/pip install -r requirements-docs.txt
+.venv/bin/python scripts/plot_benchmark.py
+```
+
+## Capturas con datos sintéticos
+
+Estas capturas se revisaron antes de publicarlas. Muestran un perfil de invitado, contenido de ejemplo y controles de la aplicación; no contienen cuentas personales, claves, recuerdos privados ni grabaciones.
+
+### Selección de audio directo del video
+
+![Interfaz con fuente de audio de pestaña y sesión de invitado vacía](docs/assets/audio-source.jpg)
+
+### Ejemplo de cálculo y tarea
+
+Captura de una prueba anterior con una frase sintética: muestra organización y explicación matemática. Algunos controles corresponden a esa revisión previa de la interfaz; no es una medición de precisión acústica ni una conversación personal.
+
+![Prueba sintética de tarea y explicación de integración por partes](docs/assets/demo-synthetic.jpg)
+
 ## Abrir en este Mac
 
 1. Abre `run.command` con doble clic, o ejecuta `./run.command` desde esta carpeta.
@@ -68,7 +111,7 @@ Configura `ASSISTANT_TELEGRAM_URL=http://127.0.0.1:PUERTO` al arrancar. Solo se 
 .venv/bin/python scripts/test_local_engines.py
 ```
 
-36 pruebas automatizadas del núcleo/API. La segunda prueba usa voz sintética de Piper, transcribe con Moonshine, extrae una huella real y ejecuta el adaptador de diarización. El audio solo existe en RAM. No mide precisión con el usuario. Resultados y limitaciones: `docs/VALIDACION.md`.
+53 pruebas automatizadas, incluidas comprobaciones de núcleo, API, detección de preguntas y el filtro experimental aislado (actualmente desactivado). La segunda prueba usa voz sintética de Piper, transcribe con Moonshine, extrae una huella real y ejecuta el adaptador de diarización. El audio solo existe en RAM. No mide precisión con el usuario. Resultados y limitaciones: `docs/VALIDACION.md`.
 
 ## Alcance pendiente
 
@@ -85,7 +128,7 @@ No se presentan esas capacidades como implementadas o medidas. La base funcional
 
 ## Lectura por sentido
 
-El texto en vivo agrupa afirmaciones consecutivas del mismo hablante en bloques y etiqueta preguntas, dudas, cuestionamientos, posibles tareas y solicitudes de recuerdo. Las revisiones técnicas se mantienen internamente, pero se ocultan en la vista principal. La edición de fragmentos está bajo «Editar texto o hablante».
+La vista principal muestra texto plano continuo. Al activar «Etiquetar voces» se muestran bloques y etiquetas de preguntas, dudas, cuestionamientos, posibles tareas y solicitudes de recuerdo. Las revisiones técnicas se mantienen internamente, pero se ocultan en la vista principal. La edición de fragmentos está bajo «Editar texto o hablante».
 
 La clasificación inicial usa señales lingüísticas conservadoras, no una comprensión semántica infalible. Las pausas del ASR siguen siendo límites acústicos internos; no determinan por sí solas los bloques mostrados. Las etiquetas no certifican afirmaciones ni confirman tareas. Esta actualización requiere reiniciar la aplicación para cargar el coordinador actualizado; reiniciar descarta el contexto temporal de la sesión actual.
 

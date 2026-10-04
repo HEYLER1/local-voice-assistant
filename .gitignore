@@ -17,3 +17,8 @@ __pycache__/
 docs/*.jpg
 docs/*.png
 TRASPASO-PRIMERA-VERSION.md
+
+# Reviewed public documentation assets only
+!docs/assets/precision-efficiency.png
+!docs/assets/audio-source.jpg
+!docs/assets/demo-synthetic.jpg
