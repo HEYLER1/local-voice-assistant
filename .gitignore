@@ -1,0 +1,19 @@
+.venv/
+.local/
+models/
+__pycache__/
+.pytest_cache/
+.env
+*.wav
+*.mp3
+*.pcm
+*.sqlite*
+*.key
+*.ses
+.DS_Store
+
+# Local experiments, screenshots, and internal handoff
+.rollback-after-live-questions/
+docs/*.jpg
+docs/*.png
+TRASPASO-PRIMERA-VERSION.md
