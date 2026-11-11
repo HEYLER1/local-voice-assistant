@@ -146,3 +146,9 @@ El filtro experimental que sustituía tramos por silencio se retiró tras report
 
 ### Audio directo de un video
 Para evitar escuchar el altavoz por el micrófono, abre el asistente y el video en Chrome, selecciona Fuente de audio → Audio del video (pestaña), pulsa Iniciar escucha y en el selector del navegador elige la pestaña del video con Compartir audio activado. La disponibilidad depende del navegador. Sin pista de audio, la captura se cancela con una indicación visible; no cambia silenciosamente al micrófono. La aplicación utiliza únicamente las pistas de audio y las mezcla a mono a 16 kHz; no procesa ni almacena imágenes. Pausar detiene todas las pistas compartidas. La calidad del video concreto queda pendiente de comparación con esta entrada.
+
+## Android independiente: asistente nativo
+
+La carpeta [android](android/README.md) contiene la versión nativa Kotlin + Jetpack Compose. Transcribe en el dispositivo con Moonshine y ofrece respuestas con Qwen local o proveedores online; organiza preguntas, resúmenes, transcripciones y conversaciones en carpetas. Las funciones online y el acceso con Google necesitan Internet. Firebase debe configurarse antes de iniciar sesión; las conversaciones permanecen en SQLite en el teléfono y no se sincronizan a la nube.
+
+El informe del A54 aportado por el usuario corresponde a pruebas anteriores de laboratorio y no valida la captura sostenida de esta versión. La documentación de Android registra las funciones, requisitos y límites de las mediciones.

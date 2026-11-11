@@ -1,0 +1,185 @@
+package com.heyler.voicelab
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+val VoiceBackground=Color(0xFF0B0E18)
+val VoiceAccent=Color(0xFFAE99FF)
+val VoiceGreen=Color(0xFF67E2BA)
+private val VoiceColors=darkColorScheme(
+    primary=VoiceAccent,onPrimary=Color(0xFF201337),primaryContainer=Color(0xFF35264D),onPrimaryContainer=Color(0xFFEDE4FF),
+    secondary=VoiceGreen,onSecondary=Color(0xFF062C23),background=VoiceBackground,onBackground=Color(0xFFF3F2F9),
+    surface=Color(0xFF141827),onSurface=Color(0xFFF3F2F9),surfaceVariant=Color(0xFF1D2335),onSurfaceVariant=Color(0xFFA6AABD),
+    outline=Color(0xFF394055),outlineVariant=Color(0xFF252B3C))
+@Composable fun VoiceTheme(content: @Composable () -> Unit){MaterialTheme(colorScheme=VoiceColors,shapes=Shapes(small=RoundedCornerShape(12.dp),medium=RoundedCornerShape(20.dp),large=RoundedCornerShape(28.dp)),content=content)}
+
+@Composable fun VoiceHeader(listening:Boolean,compact:Boolean=false,starting:Boolean=false){
+    Row(Modifier.fillMaxWidth().padding(top=if(compact)4.dp else 12.dp,bottom=if(compact)6.dp else 14.dp),verticalAlignment=Alignment.CenterVertically){
+        Image(painterResource(R.drawable.brand_mark),contentDescription="V · voz y conocimiento",modifier=Modifier.size(if(compact)32.dp else 42.dp))
+        Column(Modifier.weight(1f).padding(start=12.dp)){Text("V · Asistente",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold);if(!compact)Text("Tu voz, en claro.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        Row(Modifier.background(if(listening)VoiceGreen.copy(alpha=.12f) else VoiceAccent.copy(alpha=.12f),RoundedCornerShape(50)).padding(horizontal=12.dp,vertical=7.dp),verticalAlignment=Alignment.CenterVertically){
+            Box(Modifier.size(6.dp).background(if(listening)VoiceGreen else VoiceAccent,CircleShape));Spacer(Modifier.width(6.dp))
+            Text(if(starting)"PREPARANDO"else if(listening)"EN VIVO" else "LISTO",style=MaterialTheme.typography.labelSmall,color=if(listening)VoiceGreen else VoiceAccent,fontWeight=FontWeight.Bold)
+        }
+    }
+}
+@Composable fun ChatCircleAction(label:String,icon:String,onClick:()->Unit){
+    Surface(onClick=onClick,color=Color(0xFF222735),shape=CircleShape,modifier=Modifier.size(44.dp).border(1.dp,MaterialTheme.colorScheme.outlineVariant,CircleShape).semantics{contentDescription=label;role=Role.Button}){
+        Box(contentAlignment=Alignment.Center){VoiceGlyph(icon,MaterialTheme.colorScheme.onSurface,Modifier.size(21.dp))}
+    }
+}
+@Composable fun ConversationTopBar(selected:Int,onSelect:(Int)->Unit,onMenu:()->Unit,onNew:()->Unit){
+    Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
+        ChatCircleAction("Abrir historial de chats","menu",onMenu)
+        Surface(color=Color(0xFF222735),shape=RoundedCornerShape(50),modifier=Modifier.weight(1f)){
+            Row(Modifier.padding(4.dp),verticalAlignment=Alignment.CenterVertically){
+                listOf("Texto","Preguntas","Resumen").forEachIndexed{i,label->
+                    Box(Modifier.weight(if(i==1||i==2)1.35f else 1f).height(40.dp).background(if(selected==i)Color(0xFF39304F)else Color.Transparent,RoundedCornerShape(50)).clickable{onSelect(i)}.semantics{this.selected=selected==i;role=Role.Tab},contentAlignment=Alignment.Center){
+                        Text(label,color=if(selected==i)VoiceAccent else MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.labelMedium,fontWeight=if(selected==i)FontWeight.SemiBold else FontWeight.Normal,maxLines=1)
+                    }
+                }
+            }
+        }
+        ChatCircleAction("Nueva conversación","new-chat",onNew)
+    }
+}
+@Composable fun VoiceTabs(selected:Int,onSelect:(Int)->Unit){
+    Row(Modifier.fillMaxWidth().background(Color(0xFF141827),RoundedCornerShape(18.dp)).padding(5.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+        listOf("En vivo","Guardado","Ajustes").forEachIndexed{i,label->Box(Modifier.weight(1f).background(if(selected==i)Color(0xFF302642)else Color.Transparent,RoundedCornerShape(14.dp)).clickable{onSelect(i)}.semantics{this.selected=selected==i;role=Role.Tab}.padding(vertical=12.dp),contentAlignment=Alignment.Center){Text(label,color=if(selected==i)VoiceAccent else MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.labelLarge,fontWeight=if(selected==i)FontWeight.Bold else FontWeight.Normal)}}
+    }
+}
+@Composable fun VoiceDock(listening:Boolean,level:Float,enabled:Boolean,onPress:()->Unit,compact:Boolean=false){
+    val audio by animateFloatAsState(if(listening)level.coerceIn(0f,1f)else 0f,label="nivel real de audio")
+    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(VoiceBackground.copy(alpha=.92f),Color(0xFF151426))),RoundedCornerShape(topStart=28.dp,topEnd=28.dp)).padding(top=if(compact)2.dp else 10.dp,bottom=if(compact)2.dp else 12.dp),horizontalAlignment=Alignment.CenterHorizontally){
+        if(!compact)Canvas(Modifier.width(112.dp).height(16.dp)){
+            val count=13;val gap=size.width/count
+            for(i in 0 until count){val scale=1f-kotlin.math.abs(i-count/2f)/(count/2f+1);val height=2.dp.toPx()+audio*scale*12.dp.toPx();drawLine(if(listening)VoiceGreen else Color(0xFF414458),Offset(gap*(i+.5f),size.height/2-height/2),Offset(gap*(i+.5f),size.height/2+height/2),strokeWidth=3.dp.toPx(),cap=StrokeCap.Round)}
+        }
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.size(if(compact)60.dp else 96.dp).border((1+audio*3).dp,if(listening)VoiceGreen.copy(alpha=.45f)else VoiceAccent.copy(alpha=.18f),CircleShape).padding(7.dp),contentAlignment=Alignment.Center){
+            val action=if(listening)"Pausar escucha" else "Iniciar escucha"
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(if(listening)listOf(Color(0xFF62D8B4),Color(0xFF279B92))else listOf(Color(0xFFC5ACFF),Color(0xFF8360E9))),CircleShape).clickable(enabled=enabled,onClick=onPress).semantics{contentDescription=action;role=Role.Button},contentAlignment=Alignment.Center){
+                Canvas(Modifier.size(36.dp)){
+                    val ink=if(listening)Color(0xFF072B25)else Color(0xFF241437)
+                    if(listening){drawRoundRect(ink,Offset(size.width*.24f,size.height*.2f),Size(size.width*.17f,size.height*.6f),cornerRadius=androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()));drawRoundRect(ink,Offset(size.width*.59f,size.height*.2f),Size(size.width*.17f,size.height*.6f),cornerRadius=androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))}
+                    else{drawRoundRect(ink,Offset(size.width*.36f,size.height*.1f),Size(size.width*.28f,size.height*.48f),cornerRadius=androidx.compose.ui.geometry.CornerRadius(size.width*.14f));drawArc(ink,0f,180f,false,Offset(size.width*.22f,size.height*.26f),Size(size.width*.56f,size.height*.43f),style=Stroke(width=2.5.dp.toPx(),cap=StrokeCap.Round));drawLine(ink,Offset(size.width*.5f,size.height*.69f),Offset(size.width*.5f,size.height*.86f),strokeWidth=2.5.dp.toPx(),cap=StrokeCap.Round);drawLine(ink,Offset(size.width*.36f,size.height*.88f),Offset(size.width*.64f,size.height*.88f),strokeWidth=2.5.dp.toPx(),cap=StrokeCap.Round)}
+                }
+            }
+        }
+        if(!compact)Text(if(listening)"Toca para pausar"else if(enabled)"Toca para hablar"else "Preparando…",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(top=5.dp))
+    }
+}
+
+@Composable fun VoiceGlyph(kind:String,color:Color,modifier:Modifier=Modifier){
+    Canvas(modifier){
+        val w=size.width;val h=size.height;val stroke=Stroke(width=2.dp.toPx(),cap=StrokeCap.Round)
+        when(kind){
+            "menu"->{drawLine(color,Offset(w*.16f,h*.3f),Offset(w*.84f,h*.3f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.16f,h*.66f),Offset(w*.61f,h*.66f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "chevron"->{drawLine(color,Offset(w*.2f,h*.35f),Offset(w*.5f,h*.65f),strokeWidth=1.5.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.5f,h*.65f),Offset(w*.8f,h*.35f),strokeWidth=1.5.dp.toPx(),cap=StrokeCap.Round)}
+            "new-chat"->{drawRoundRect(color,Offset(w*.12f,h*.15f),Size(w*.66f,h*.65f),androidx.compose.ui.geometry.CornerRadius(w*.15f),style=stroke);drawLine(color,Offset(w*.49f,h*.55f),Offset(w*.86f,h*.18f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.46f,h*.58f),Offset(w*.58f,h*.56f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "send"->{drawLine(color,Offset(w*.5f,h*.82f),Offset(w*.5f,h*.2f),strokeWidth=2.3.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.2f,h*.48f),Offset(w*.5f,h*.18f),strokeWidth=2.3.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.5f,h*.18f),Offset(w*.8f,h*.48f),strokeWidth=2.3.dp.toPx(),cap=StrokeCap.Round)}
+            "close"->{drawLine(color,Offset(w*.25f,h*.25f),Offset(w*.75f,h*.75f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.75f,h*.25f),Offset(w*.25f,h*.75f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "add"->{drawLine(color,Offset(w*.2f,h*.5f),Offset(w*.8f,h*.5f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.5f,h*.2f),Offset(w*.5f,h*.8f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "search"->{drawCircle(color,w*.27f,Offset(w*.42f,h*.42f),style=stroke);drawLine(color,Offset(w*.63f,h*.63f),Offset(w*.85f,h*.85f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "chat"->{drawRoundRect(color,Offset(w*.12f,h*.15f),Size(w*.76f,h*.58f),androidx.compose.ui.geometry.CornerRadius(w*.14f),style=stroke);drawLine(color,Offset(w*.25f,h*.73f),Offset(w*.25f,h*.9f),strokeWidth=2.dp.toPx());drawLine(color,Offset(w*.25f,h*.9f),Offset(w*.45f,h*.73f),strokeWidth=2.dp.toPx())}
+            "check"->{drawLine(color,Offset(w*.18f,h*.52f),Offset(w*.4f,h*.74f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.4f,h*.74f),Offset(w*.84f,h*.24f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "minus"->{drawLine(color,Offset(w*.2f,h*.5f),Offset(w*.8f,h*.5f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+            "notes"->{for(i in 0..2){val y=h*(.25f+i*.25f);drawCircle(color,1.dp.toPx(),Offset(w*.15f,y));drawLine(color,Offset(w*.35f,y),Offset(w*.85f,y),strokeWidth=1.6.dp.toPx(),cap=StrokeCap.Round)}}
+            "refresh"->{drawArc(color,40f,285f,false,Offset(w*.17f,h*.17f),Size(w*.66f,h*.66f),style=stroke);val arrow=androidx.compose.ui.graphics.Path().apply{moveTo(w*.85f,h*.13f);lineTo(w*.85f,h*.43f);lineTo(w*.55f,h*.16f);close()};drawPath(arrow,color)}
+            "fit","expand"->{for(x in listOf(.18f,.82f))for(y in listOf(.18f,.82f)){val dx=if(x<.5f).18f else -.18f;val dy=if(y<.5f).18f else -.18f;drawLine(color,Offset(w*x,h*y),Offset(w*(x+dx),h*y),strokeWidth=1.6.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*x,h*y),Offset(w*x,h*(y+dy)),strokeWidth=1.6.dp.toPx(),cap=StrokeCap.Round)}}
+            "copy"->{
+                val back=androidx.compose.ui.graphics.Path().apply{moveTo(w*.62f,h*.12f);lineTo(w*.22f,h*.12f);quadraticTo(w*.12f,h*.12f,w*.12f,h*.22f);lineTo(w*.12f,h*.64f);quadraticTo(w*.12f,h*.74f,w*.22f,h*.74f);lineTo(w*.25f,h*.74f)}
+                drawPath(back,color,style=stroke)
+                drawRoundRect(color,Offset(w*.32f,h*.3f),Size(w*.54f,h*.58f),androidx.compose.ui.geometry.CornerRadius(w*.08f),style=stroke)
+            }
+            "save"->{val path=androidx.compose.ui.graphics.Path().apply{moveTo(w*.25f,h*.13f);lineTo(w*.75f,h*.13f);lineTo(w*.75f,h*.88f);lineTo(w*.5f,h*.7f);lineTo(w*.25f,h*.88f);close()};drawPath(path,color,style=stroke)}
+            "settings"->{drawCircle(color,w*.18f,Offset(w/2,h/2),style=stroke);for(i in 0 until 8){val angle=i*Math.PI/4;val x=kotlin.math.cos(angle).toFloat();val y=kotlin.math.sin(angle).toFloat();drawLine(color,Offset(w/2+x*w*.31f,h/2+y*h*.31f),Offset(w/2+x*w*.42f,h/2+y*h*.42f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}}
+            "spark"->{val path=androidx.compose.ui.graphics.Path().apply{moveTo(w*.5f,h*.08f);lineTo(w*.62f,h*.38f);lineTo(w*.92f,h*.5f);lineTo(w*.62f,h*.62f);lineTo(w*.5f,h*.92f);lineTo(w*.38f,h*.62f);lineTo(w*.08f,h*.5f);lineTo(w*.38f,h*.38f);close()};drawPath(path,color,style=stroke)}
+            "pause"->{drawRoundRect(color,Offset(w*.24f,h*.18f),Size(w*.18f,h*.64f),androidx.compose.ui.geometry.CornerRadius(w*.07f));drawRoundRect(color,Offset(w*.58f,h*.18f),Size(w*.18f,h*.64f),androidx.compose.ui.geometry.CornerRadius(w*.07f))}
+            else->{drawRoundRect(color,Offset(w*.36f,h*.08f),Size(w*.28f,h*.5f),androidx.compose.ui.geometry.CornerRadius(w*.14f));drawArc(color,0f,180f,false,Offset(w*.2f,h*.24f),Size(w*.6f,h*.46f),style=stroke);drawLine(color,Offset(w*.5f,h*.7f),Offset(w*.5f,h*.88f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round);drawLine(color,Offset(w*.35f,h*.9f),Offset(w*.65f,h*.9f),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}
+        }
+    }
+}
+@Composable fun VoiceNavigation(selected:Int,compact:Boolean=false,embedded:Boolean=false,onSelect:(Int)->Unit){
+    Row(Modifier.fillMaxWidth().background(Color(0xFF111621)).then(if(embedded)Modifier else Modifier.navigationBarsPadding()).padding(horizontal=18.dp,vertical=if(compact)4.dp else 9.dp)){
+        listOf("Conversar" to "chat","Guardado" to "save","Ajustes" to "settings").forEachIndexed{i,(title,icon)->
+            Column(Modifier.weight(1f).clickable{onSelect(i)}.semantics{this.selected=selected==i;role=Role.Tab}.padding(vertical=4.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(5.dp)){
+                VoiceGlyph(icon,if(selected==i)VoiceAccent else Color(0xFF7D899E),Modifier.size(22.dp));Text(title,style=MaterialTheme.typography.labelSmall,color=if(selected==i)VoiceAccent else Color(0xFF7D899E))
+            }
+        }
+    }
+}
+@Composable fun FloatingVoiceTools(listening:Boolean,level:Float,enabled:Boolean,onVoice:()->Unit,onWrite:()->Unit,onSummary:()->Unit,showTools:Boolean,compact:Boolean=false,starting:Boolean=false){
+    Row(Modifier.fillMaxWidth().padding(horizontal=18.dp),verticalAlignment=Alignment.CenterVertically){
+        Box(Modifier.weight(1f),contentAlignment=Alignment.Center){if(showTools)FloatingTool("Escribir","chat",onWrite)}
+        Column(horizontalAlignment=Alignment.CenterHorizontally){
+            val action=if(starting)"Cancelar preparación"else if(listening)"Pausar escucha"else "Iniciar escucha"
+            Box(Modifier.size(if(compact)62.dp else 82.dp).border((1+level.coerceIn(0f,1f)*3).dp,if(listening)VoiceGreen.copy(alpha=.55f)else VoiceAccent.copy(alpha=.4f),CircleShape).padding(5.dp),contentAlignment=Alignment.Center){
+                Surface(onClick=onVoice,enabled=enabled,shape=CircleShape,color=if(listening)VoiceGreen else Color(0xFFB59BFF),shadowElevation=18.dp,modifier=Modifier.fillMaxSize().semantics{contentDescription=action;role=Role.Button}){Box(contentAlignment=Alignment.Center){VoiceGlyph(if(listening)"pause"else "mic",Color(0xFF211334),Modifier.size(32.dp))}}
+            }
+            Text(if(starting)"Preparando…"else if(listening)"Pausar"else "Hablar",style=MaterialTheme.typography.labelSmall,color=Color(0xFFD7D4E6),modifier=Modifier.padding(top=5.dp))
+        }
+        Box(Modifier.weight(1f),contentAlignment=Alignment.Center){if(showTools)FloatingTool("Mapa","spark",onSummary)}
+    }
+}
+@Composable private fun FloatingTool(label:String,icon:String,onClick:()->Unit){Column(horizontalAlignment=Alignment.CenterHorizontally){Surface(onClick=onClick,color=Color(0xFF273043),shape=RoundedCornerShape(17.dp),shadowElevation=8.dp,modifier=Modifier.size(46.dp)){Box(contentAlignment=Alignment.Center){VoiceGlyph(icon,Color(0xFFCFD5E3),Modifier.size(21.dp))}};Text(label,style=MaterialTheme.typography.labelSmall,color=Color(0xFFABB5C7),modifier=Modifier.padding(top=6.dp))}}
+
+@Composable fun ChatVoiceComposer(listening:Boolean,starting:Boolean,level:Float,enabled:Boolean,onVoice:()->Unit,text:String,onText:(String)->Unit,onSend:()->Unit){
+    val keyboard=LocalSoftwareKeyboardController.current
+    val focus=LocalFocusManager.current
+    val idleFocus=remember{FocusRequester()}
+    var fieldFocused by remember{mutableStateOf(false)}
+    LaunchedEffect(fieldFocused){if(fieldFocused){withFrameNanos{};keyboard?.show()}}
+    val send={if(enabled&&text.isNotBlank()){focus.clearFocus(force=true);idleFocus.requestFocus();keyboard?.hide();onSend()}}
+    Column(Modifier.fillMaxWidth().focusRequester(idleFocus).focusable().navigationBarsPadding().imePadding().padding(horizontal=16.dp,vertical=8.dp)){
+        Surface(color=Color(0xFF222735),shape=RoundedCornerShape(32.dp),modifier=Modifier.fillMaxWidth().border(1.dp,MaterialTheme.colorScheme.outlineVariant,RoundedCornerShape(32.dp))){
+            Row(Modifier.padding(horizontal=8.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+                TextField(value=text,onValueChange=onText,enabled=enabled,placeholder={Text("Escribe o habla con V")},modifier=Modifier.weight(1f).onFocusChanged{fieldFocused=it.isFocused}.pointerInput(enabled,keyboard){awaitPointerEventScope{while(true){val event=awaitPointerEvent(PointerEventPass.Final);if(enabled&&event.changes.any{it.previousPressed&&!it.pressed})keyboard?.show()}}}.semantics{contentDescription="Mensaje para V"},maxLines=4,shape=RoundedCornerShape(24.dp),colors=TextFieldDefaults.colors(focusedContainerColor=Color.Transparent,unfocusedContainerColor=Color.Transparent,disabledContainerColor=Color.Transparent,focusedIndicatorColor=Color.Transparent,unfocusedIndicatorColor=Color.Transparent),keyboardOptions=KeyboardOptions(imeAction=ImeAction.Send),keyboardActions=KeyboardActions(onSend={send()}))
+                if(text.isNotBlank())IconButton(onClick={send()},enabled=enabled,modifier=Modifier.semantics{contentDescription="Enviar mensaje"}){VoiceGlyph("send",VoiceAccent,Modifier.size(22.dp))}
+                Surface(onClick={focus.clearFocus(force=true);idleFocus.requestFocus();keyboard?.hide();onVoice()},enabled=enabled,color=if(listening)VoiceGreen else Color(0xFFF2F1F7),shape=CircleShape,modifier=Modifier.size(48.dp).semantics{contentDescription=if(starting)"Cancelar preparación"else if(listening)"Pausar escucha"else "Iniciar escucha";role=Role.Button}){
+                    Box(contentAlignment=Alignment.Center){VoiceGlyph(if(listening)"pause"else "mic",Color(0xFF171921),Modifier.size(23.dp))}
+                }
+            }
+        }
+        if(listening||starting)Row(Modifier.fillMaxWidth().padding(top=6.dp),horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically){
+            Text(if(starting)"Preparando…"else "Escuchando · toca para pausar",style=MaterialTheme.typography.labelSmall,color=VoiceGreen)
+            if(listening)Canvas(Modifier.padding(start=8.dp).width(40.dp).height(12.dp)){for(i in 0..4){val h=2.dp.toPx()+level.coerceIn(0f,1f)*(if(i==2)10 else 6).dp.toPx();drawLine(VoiceGreen,Offset(size.width*(i+1)/6,size.height/2-h/2),Offset(size.width*(i+1)/6,size.height/2+h/2),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)}}
+        }
+    }
+}

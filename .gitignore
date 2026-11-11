@@ -22,3 +22,18 @@ TRASPASO-PRIMERA-VERSION.md
 !docs/assets/precision-efficiency.png
 !docs/assets/audio-source.jpg
 !docs/assets/demo-synthetic.jpg
+
+# Android build products and machine-local settings
+android/.gradle/
+android/.kotlin/
+android/**/build/
+android/dist/
+android/local.properties
+android/app/google-services.json
+*.apk
+*.litertlm
+!android/app/src/main/assets/fixtures/*.wav
+
+# Third-party application packages for local inspection only
+*.xapk
+*.apks
