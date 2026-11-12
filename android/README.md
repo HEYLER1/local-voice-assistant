@@ -2,11 +2,19 @@
 
 ![Logo de V](docs/assets/v-logo.svg)
 
-Asistente para estudiantes en Kotlin y Jetpack Compose: transcripción, respuestas locales u online, contexto de clase, carpetas, tareas, avisos de examen, historial en el dispositivo y escucha en segundo plano con botón flotante.
+Asistente para reuniones y estudiantes en Kotlin y Jetpack Compose: transcripción local, respuestas online con contexto, resúmenes, carpetas, historial y escucha en segundo plano.
+
+## Android 0.42 · lectura a pantalla completa
+
+Texto y Preguntas ahora usan toda la pantalla para desplazarse por debajo de la barra superior y el micrófono, sin quedar encerrados en un área recortada. Resumen conserva su área protegida. Se retiraron Soniqo y Moonshine del APK y de la ruta de escucha: la transcripción queda exclusivamente en el reconocimiento local de Android. El laboratorio conserva Qwen3/LiteRT solo para métricas de respuestas.
+
+El APK de depuración pasó de **129,7 MiB** a **73,1 MiB**. Las bibliotecas nativas empaquetadas bajaron de **72,2 MiB** a **21,1 MiB**; la restante es LiteRT-LM para las métricas locales de Qwen3. Los WAV se movieron a los recursos de prueba para que no se empaqueten con la app. La transcripción y las respuestas online no dependen de Soniqo ni Moonshine.
+
+APK: `dist/v-asistente-android-0.42.apk`.
 
 ## Acceso con Google
 
-La app usa Credential Manager para elegir la cuenta y Firebase Authentication para validar y mantener la sesión. El acceso ya está integrado; hace falta conectar un proyecto Firebase propio antes de usarlo. Sigue [la configuración de Google Auth](docs/GOOGLE_AUTH.md). El archivo `google-services.json` es local y está excluido de Git. Las conversaciones siguen en el teléfono, separadas por UID; iniciar sesión no activa sincronización en la nube.
+La app usa Credential Manager y Firebase Authentication para iniciar sesión. El historial local se separa por UID y se sincroniza con Cloud Firestore al configurar la base de datos y publicar las reglas. Consulta [configuración de Google Auth](docs/GOOGLE_AUTH.md) y [sincronización con Firestore](docs/FIRESTORE_SYNC.md). `google-services.json` es local y está excluido de Git. Se sincronizan conversaciones, textos y tareas guardados; el audio no se guarda.
 
 ## Validación del formato del resumen
 

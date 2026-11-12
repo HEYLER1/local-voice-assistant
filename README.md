@@ -149,6 +149,6 @@ Para evitar escuchar el altavoz por el micrófono, abre el asistente y el video 
 
 ## Android independiente: asistente nativo
 
-La carpeta [android](android/README.md) contiene la versión nativa Kotlin + Jetpack Compose. Transcribe en el dispositivo con Moonshine y ofrece respuestas con Qwen local o proveedores online; organiza preguntas, resúmenes, transcripciones y conversaciones en carpetas. Las funciones online y el acceso con Google necesitan Internet. Firebase debe configurarse antes de iniciar sesión; las conversaciones permanecen en SQLite en el teléfono y no se sincronizan a la nube.
+La carpeta [android](android/README.md) contiene la versión nativa Kotlin + Jetpack Compose. Transcribe con el reconocimiento de voz local de Android y ofrece respuestas online; organiza preguntas, resúmenes, transcripciones y conversaciones en carpetas. El acceso con Google usa Firebase Authentication; el historial se conserva en SQLite y se sincroniza por UID con Cloud Firestore cuando la base de datos y sus reglas están habilitadas. El audio no se guarda.
 
 El informe del A54 aportado por el usuario corresponde a pruebas anteriores de laboratorio y no valida la captura sostenida de esta versión. La documentación de Android registra las funciones, requisitos y límites de las mediciones.

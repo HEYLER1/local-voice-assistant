@@ -28,9 +28,9 @@ Firebase genera en ese archivo el cliente OAuth web que Credential Manager neces
 
 - No se puede abrir el chat sin iniciar sesión en una cuenta de Google.
 - Firebase conserva la sesión y restaura el usuario al volver a abrir la app.
-- El historial y los textos guardados permanecen en SQLite en el teléfono y se particionan por el UID de Firebase. El inicio de sesión no crea una copia en la nube ni sincroniza datos entre teléfonos.
-- Si ya había conversaciones sin cuenta, aparece una confirmación para asociarlas a la primera cuenta. Si eliges dejarlas aparte, siguen en el almacenamiento local anterior y puedes importarlas luego desde **Ajustes → Cuenta de Google**.
-- Cerrar sesión detiene la escucha, conserva el historial local de esa cuenta y limpia el estado de credenciales de Credential Manager. Al volver con la misma cuenta, el historial reaparece en ese teléfono.
+- SQLite conserva una copia local del historial, particionada por UID. Cuando Cloud Firestore y sus reglas están habilitados, las transcripciones, preguntas, respuestas, resúmenes y textos o tareas guardados también se sincronizan con la cuenta; el audio no se guarda. Sigue [la guía de Firestore](FIRESTORE_SYNC.md) para crear la base y publicar las reglas.
+- Si ya había conversaciones sin cuenta, aparece una confirmación para asociarlas a la primera cuenta. Al elegir **Asociar a esta cuenta**, se preparan para sincronizar; **Dejar aparte** conserva los datos en el espacio local anterior y puedes importarlos luego desde **Ajustes → Cuenta de Google**.
+- Cerrar sesión detiene la escucha, conserva la copia local de esa cuenta y limpia el estado de credenciales de Credential Manager. Al volver con la misma cuenta, el historial local se restaura y se compara con el guardado en Firestore.
 - La autenticación de Google no cambia el envío de fragmentos de texto a Pollinations o AI Horde cuando se solicitan respuestas online. No se envía el audio a esos proveedores.
 
 ## Dependencias integradas

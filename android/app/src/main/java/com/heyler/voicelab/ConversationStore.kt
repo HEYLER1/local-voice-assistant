@@ -7,16 +7,18 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class ConversationEntry(val id:Long,val title:String,val updated:Long,val fragments:Int=0,val questions:Int=0,val folderId:Long?=null)
+data class ConversationEntry(val id:Long,val title:String,val updated:Long,val fragments:Int=0,val questions:Int=0,val folderId:Long?=null,val pinned:Boolean=false)
 data class ConversationFolder(val id:Long,val name:String)
+data class CloudConversationRecord(val id:Long,val title:String,val updated:Long,val fragments:Int,val questions:Int,val folderName:String?,val payload:String)
 
 /** Local history is partitioned by the authenticated account. Legacy data remains separately owned until the user imports it. */
-class ConversationStore(context:Context,databaseName:String="conversations.db",private val ownerId:String="legacy"):SQLiteOpenHelper(context,databaseName,null,3){
+class ConversationStore(context:Context,databaseName:String="conversations.db",private val ownerId:String="legacy"):SQLiteOpenHelper(context,databaseName,null,4){
     override fun onConfigure(db:SQLiteDatabase){db.setForeignKeyConstraintsEnabled(true)}
     override fun onCreate(db:SQLiteDatabase){
         db.execSQL("CREATE TABLE folders(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL COLLATE NOCASE,owner_id TEXT NOT NULL,UNIQUE(owner_id,name))")
         db.execSQL("CREATE TABLE sessions(id INTEGER PRIMARY KEY,title TEXT NOT NULL,updated INTEGER NOT NULL,data TEXT NOT NULL,fragments INTEGER NOT NULL DEFAULT 0,questions INTEGER NOT NULL DEFAULT 0,folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL,owner_id TEXT NOT NULL)")
         db.execSQL("CREATE INDEX sessions_folder ON sessions(owner_id,folder_id)")
+        db.execSQL("CREATE TABLE sync_deletions(id INTEGER NOT NULL,deleted_at INTEGER NOT NULL,owner_id TEXT NOT NULL,PRIMARY KEY(owner_id,id))")
     }
     override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){
         if(oldVersion<2){
@@ -33,6 +35,7 @@ class ConversationStore(context:Context,databaseName:String="conversations.db",p
             db.execSQL("ALTER TABLE sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'legacy'")
             rebuildOwnerScopedTables(db)
         }
+        if(oldVersion<4)db.execSQL("CREATE TABLE sync_deletions(id INTEGER NOT NULL,deleted_at INTEGER NOT NULL,owner_id TEXT NOT NULL,PRIMARY KEY(owner_id,id))")
     }
     private fun rebuildOwnerScopedTables(db:SQLiteDatabase){
         db.execSQL("CREATE TABLE folders_scoped(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL COLLATE NOCASE,owner_id TEXT NOT NULL,UNIQUE(owner_id,name))")
@@ -52,15 +55,35 @@ class ConversationStore(context:Context,databaseName:String="conversations.db",p
         db.insertWithOnConflict("folders",null,ContentValues().apply{put("name",value);put("owner_id",ownerId)},SQLiteDatabase.CONFLICT_IGNORE)
         return db.rawQuery("SELECT id FROM folders WHERE name=? COLLATE NOCASE AND owner_id=?",arrayOf(value,ownerId)).use{check(it.moveToFirst());it.getLong(0)}
     }
-    fun renameFolder(id:Long,name:String){val value=folderName(name);require(folders().none{it.id!=id&&it.name.equals(value,true)}){"Ya existe una carpeta con ese nombre."};writableDatabase.update("folders",ContentValues().apply{put("name",value)},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
-    fun deleteFolder(id:Long){writableDatabase.delete("folders","id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
-    fun move(id:Long,folder:Long?){require(folder==null||folders().any{it.id==folder}){"Carpeta no disponible."};writableDatabase.update("sessions",ContentValues().apply{if(folder==null)putNull("folder_id")else put("folder_id",folder)},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
+    fun renameFolder(id:Long,name:String){val value=folderName(name);require(folders().none{it.id!=id&&it.name.equals(value,true)}){"Ya existe una carpeta con ese nombre."};val db=writableDatabase;db.update("folders",ContentValues().apply{put("name",value)},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId));db.update("sessions",ContentValues().apply{put("updated",System.currentTimeMillis())},"folder_id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
+    fun deleteFolder(id:Long){val db=writableDatabase;val sessions=db.rawQuery("SELECT id FROM sessions WHERE folder_id=? AND owner_id=?",arrayOf(id.toString(),ownerId)).use{c->buildList{while(c.moveToNext())add(c.getLong(0))}};db.delete("folders","id=? AND owner_id=?",arrayOf(id.toString(),ownerId));sessions.forEach{db.update("sessions",ContentValues().apply{put("updated",System.currentTimeMillis())},"id=? AND owner_id=?",arrayOf(it.toString(),ownerId))}}
+    fun move(id:Long,folder:Long?){require(folder==null||folders().any{it.id==folder}){"Carpeta no disponible."};writableDatabase.update("sessions",ContentValues().apply{if(folder==null)putNull("folder_id")else put("folder_id",folder);put("updated",System.currentTimeMillis())},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
 
-    fun list():List<ConversationEntry> = readableDatabase.rawQuery("SELECT id,title,updated,fragments,questions,folder_id,data FROM sessions WHERE owner_id=? ORDER BY updated DESC",arrayOf(ownerId)).use{c->buildList{while(c.moveToNext())add(ConversationEntry(c.getLong(0),if(JSONObject(c.getString(6)).has("automaticName"))JSONObject(c.getString(6)).let{data->ConversationNaming.saved(data.optString("name"),data.optString("automaticName"))}else ConversationNaming.display(decode(JSONObject(c.getString(6)),if(c.isNull(5))null else c.getLong(5))),c.getLong(2),c.getInt(3),c.getInt(4),if(c.isNull(5))null else c.getLong(5)))}}
+    fun cloudRecords():List<CloudConversationRecord>{
+        val folderNames=folders().associate{it.id to it.name}
+        return readableDatabase.rawQuery("SELECT id,title,updated,fragments,questions,folder_id,data FROM sessions WHERE owner_id=?",arrayOf(ownerId)).use{c->buildList{while(c.moveToNext())add(CloudConversationRecord(c.getLong(0),c.getString(1),c.getLong(2),c.getInt(3),c.getInt(4),if(c.isNull(5))null else folderNames[c.getLong(5)],c.getString(6)))}}
+    }
+    fun upsertCloud(record:CloudConversationRecord){
+        val folder=record.folderName?.takeIf{it.isNotBlank()}?.let(::createFolder)
+        val values=ContentValues().apply{put("title",record.title);put("updated",record.updated);put("data",record.payload);put("fragments",record.fragments);put("questions",record.questions);put("owner_id",ownerId);if(folder==null)putNull("folder_id")else put("folder_id",folder)}
+        val db=writableDatabase
+        if(db.update("sessions",values,"id=? AND owner_id=?",arrayOf(record.id.toString(),ownerId))==0){values.put("id",record.id);db.insertWithOnConflict("sessions",null,values,SQLiteDatabase.CONFLICT_REPLACE)}
+        db.delete("sync_deletions","id=? AND owner_id=?",arrayOf(record.id.toString(),ownerId))
+    }
+    fun cloudDeletions():Map<Long,Long> = readableDatabase.rawQuery("SELECT id,deleted_at FROM sync_deletions WHERE owner_id=?",arrayOf(ownerId)).use{c->buildMap{while(c.moveToNext())put(c.getLong(0),c.getLong(1))}}
+    fun clearCloudDeletion(id:Long){writableDatabase.delete("sync_deletions","id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
+    fun removeFromCloud(id:Long){writableDatabase.delete("sessions","id=? AND owner_id=?",arrayOf(id.toString(),ownerId));clearCloudDeletion(id)}
+
+    fun list():List<ConversationEntry> = readableDatabase.rawQuery("SELECT id,title,updated,fragments,questions,folder_id,data FROM sessions WHERE owner_id=? ORDER BY updated DESC",arrayOf(ownerId)).use{c->buildList{while(c.moveToNext()){
+        val data=JSONObject(c.getString(6));val folder=if(c.isNull(5))null else c.getLong(5)
+        val title=if(data.has("automaticName"))ConversationNaming.saved(data.optString("name"),data.optString("automaticName"))else ConversationNaming.display(decode(data,folder))
+        add(ConversationEntry(c.getLong(0),title,c.getLong(2),c.getInt(3),c.getInt(4),folder,data.optBoolean("pinned",false)))
+    }}}
 
     fun save(id:Long,state:AssistantState){
         if(state.lines.isEmpty()&&state.answers.isEmpty())return
-        val data=JSONObject().put("summary",state.summary).put("name",state.conversationTitle).put("automaticName",ConversationNaming.automatic(state))
+        val pinned=readableDatabase.rawQuery("SELECT data FROM sessions WHERE id=? AND owner_id=?",arrayOf(id.toString(),ownerId)).use{cursor->cursor.moveToFirst()&&runCatching{JSONObject(cursor.getString(0)).optBoolean("pinned",false)}.getOrDefault(false)}
+        val data=JSONObject().put("summary",state.summary).put("name",state.conversationTitle).put("automaticName",ConversationNaming.automatic(state)).put("pinned",pinned)
         data.put("organization",JSONObject().put("title",state.organization.title).put("map",state.organization.map?.let{ResearchedMapCodec.encode(it)}?:JSONObject.NULL).put("topics",JSONArray(state.organization.topics)).put("sections",JSONArray().apply{state.organization.sections.forEach{section->put(JSONObject().put("title",section.title).put("text",section.text).put("sources",JSONArray(section.sources)))}}).put("covered",JSONObject().apply{state.organization.covered.forEach{(id,revision)->put(id.toString(),revision)}}))
         data.put("lines",JSONArray().apply{state.lines.forEach{put(JSONObject().put("id",it.id).put("text",it.text).put("revision",it.revision).put("voice",it.voice).put("final",it.final).put("edited",it.edited))}})
         data.put("answers",JSONArray().apply{state.answers.forEach{put(JSONObject().put("id",it.id).put("source",it.source?:JSONObject.NULL).put("revision",it.revision).put("question",it.question).put("text",it.text).put("status",it.status).put("first",it.firstTextMs?:JSONObject.NULL).put("evidence",it.evidence).put("suggested",it.suggested).put("sources",JSONArray(it.supportingSources)))}})
@@ -69,6 +92,7 @@ class ConversationStore(context:Context,databaseName:String="conversations.db",p
         try{
             db.insertWithOnConflict("sessions",null,ContentValues().apply{put("id",id);put("title",title);put("updated",System.currentTimeMillis());put("data",data.toString());put("fragments",state.lines.size);put("questions",state.answers.size);put("owner_id",ownerId);state.folderId?.takeIf{folder->folders().any{it.id==folder}}?.let{put("folder_id",it)}},SQLiteDatabase.CONFLICT_IGNORE)
             db.update("sessions",ContentValues().apply{put("title",title);put("updated",System.currentTimeMillis());put("data",data.toString());put("fragments",state.lines.size);put("questions",state.answers.size)} ,"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))
+            db.delete("sync_deletions","id=? AND owner_id=?",arrayOf(id.toString(),ownerId))
             db.setTransactionSuccessful()
         }finally{db.endTransaction()}
     }
@@ -82,10 +106,20 @@ class ConversationStore(context:Context,databaseName:String="conversations.db",p
     fun rename(id:Long,title:String){
         val db=writableDatabase;db.beginTransaction()
         try{db.rawQuery("SELECT data FROM sessions WHERE id=? AND owner_id=?",arrayOf(id.toString(),ownerId)).use{cursor->
-            if(cursor.moveToFirst()){val data=JSONObject(cursor.getString(0)).put("name",title);db.update("sessions",ContentValues().apply{put("title",title);put("data",data.toString())},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
+            if(cursor.moveToFirst()){val data=JSONObject(cursor.getString(0)).put("name",title);db.update("sessions",ContentValues().apply{put("title",title);put("data",data.toString());put("updated",System.currentTimeMillis())},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
         };db.setTransactionSuccessful()}finally{db.endTransaction()}
     }
-    fun delete(id:Long){writableDatabase.delete("sessions","id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
+    fun setPinned(id:Long,pinned:Boolean){
+        val db=writableDatabase
+        db.beginTransaction()
+        try{db.rawQuery("SELECT data FROM sessions WHERE id=? AND owner_id=?",arrayOf(id.toString(),ownerId)).use{cursor->
+            if(cursor.moveToFirst()){
+                val data=JSONObject(cursor.getString(0)).put("pinned",pinned)
+                db.update("sessions",ContentValues().apply{put("data",data.toString())},"id=? AND owner_id=?",arrayOf(id.toString(),ownerId))
+            }
+        };db.setTransactionSuccessful()}finally{db.endTransaction()}
+    }
+    fun delete(id:Long){val db=writableDatabase;if(ownerId!="legacy")db.insertWithOnConflict("sync_deletions",null,ContentValues().apply{put("id",id);put("deleted_at",System.currentTimeMillis());put("owner_id",ownerId)},SQLiteDatabase.CONFLICT_REPLACE);db.delete("sessions","id=? AND owner_id=?",arrayOf(id.toString(),ownerId))}
     fun maxSessionId():Long=readableDatabase.rawQuery("SELECT COALESCE(MAX(id),0) FROM sessions",null).use{if(it.moveToFirst())it.getLong(0)else 0L}
     fun hasLegacyData():Boolean=readableDatabase.rawQuery("SELECT 1 FROM sessions WHERE owner_id='legacy' UNION ALL SELECT 1 FROM folders WHERE owner_id='legacy' LIMIT 1",null).use{it.moveToFirst()}
     fun assignLegacyDataToCurrentOwner(){
