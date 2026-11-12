@@ -152,3 +152,11 @@ Para evitar escuchar el altavoz por el micrófono, abre el asistente y el video 
 La carpeta [android](android/README.md) contiene la versión nativa Kotlin + Jetpack Compose. Transcribe con el reconocimiento de voz local de Android y ofrece respuestas online; organiza preguntas, resúmenes, transcripciones y conversaciones en carpetas. El acceso con Google usa Firebase Authentication; el historial se conserva en SQLite y se sincroniza por UID con Cloud Firestore cuando la base de datos y sus reglas están habilitadas. El audio no se guarda.
 
 El informe del A54 aportado por el usuario corresponde a pruebas anteriores de laboratorio y no valida la captura sostenida de esta versión. La documentación de Android registra las funciones, requisitos y límites de las mediciones.
+
+### Validación Android 0.42
+
+Los informes conservados registran **105/105 pruebas unitarias** y **1/1 prueba instrumentada** aprobadas en emulador (106 casos en total, cero fallos). El APK local de depuración pesa **72,10 MiB**. Las consultas online ficticias variaron de **7,41 a 45,83 s** hasta el primer texto; no es una medición de transcripción en vivo ni una garantía de velocidad.
+
+![Estado de las pruebas Android 0.42](android/docs/assets/android-test-results.svg)
+
+Consulta el [informe Android completo](android/README.md#pruebas-y-m%C3%A9tricas-android-042), con la cobertura, gráficos de tamaño, datos online y limitaciones. La configuración personal de Firebase y los APK no se incluyen en GitHub.
